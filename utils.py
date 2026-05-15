@@ -132,7 +132,7 @@ def detecter_colonnes(df: pd.DataFrame) -> dict:
 # Construction du DataFrame tickets (sortie OCR → app)
 # ---------------------------------------------------------------------------
 
-COLONNES_TICKETS = ["fichier", "enseigne", "montant", "date"]
+COLONNES_TICKETS = ["fichier", "enseigne", "montant", "tva", "date"]
 
 
 def creer_dataframe_vide() -> pd.DataFrame:
@@ -145,6 +145,7 @@ def ajouter_ligne(df: pd.DataFrame, resultat_ocr: dict) -> pd.DataFrame:
         "fichier":  resultat_ocr.get("fichier", ""),
         "enseigne": resultat_ocr.get("enseigne") or "",
         "montant":  normaliser_montant(resultat_ocr.get("montant")),
+        "tva":      normaliser_montant(resultat_ocr.get("tva")),
         "date":     date_vers_str(resultat_ocr.get("date")),
     }
     return pd.concat([df, pd.DataFrame([ligne])], ignore_index=True)

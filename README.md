@@ -7,19 +7,17 @@ Fonctionne entièrement hors ligne, sur ton réseau local, sans compte ni clé A
 
 ## Ce que fait l'application
 
-1. Tu uploades une photo de ticket, facture ou reçu
-2. Le modèle Qwen3-VL (en local) en extrait le montant, la date et le nom de l'enseigne
-3. Tu vérifies et corriges les données dans un tableau éditable
-4. Tu exportes un CSV propre
-5. Tu importes ton relevé bancaire et l'application fait le rapprochement automatiquement
+1. Tu uploades une ou plusieurs photos de tickets ou factures (JPG, PNG, PDF)
+2. Le modèle Qwen3-VL (en local via Ollama) extrait le montant, la TVA, la date et le nom de l'enseigne
+3. Chaque résultat est sauvegardé automatiquement sur disque — tu peux reprendre à tout moment
+4. Tu importes ton relevé bancaire (CSV), tu indiques quelle colonne correspond à quoi
+5. L'application fait le rapprochement automatiquement et tu exportes le rapport
 
 ---
 
 ## Installation — à faire une seule fois
 
 ### 1. Télécharger et installer Ollama
-
-Ollama fait tourner le modèle d'IA en local sur ton ordinateur.
 
 👉 [https://ollama.com/download](https://ollama.com/download)
 
@@ -39,11 +37,17 @@ ollama run qwen3-vl
 Le téléchargement prend quelques minutes (~5 Go). Une barre de progression s'affiche.  
 Une fois terminé, tu peux fermer le terminal avec `Ctrl + C`.
 
+> **Si ta carte GPU a moins de 5 Go de VRAM** (ex. Quadro T1000 4 Go), télécharge la version plus légère :
+> ```
+> ollama pull qwen3-vl:7b-q3_K_M
+> ```
+> Elle pèse ~3,4 Go et tient entièrement en VRAM, ce qui est plus rapide que la version standard en mode hybride CPU/GPU.
+
 ---
 
 ### 3. Télécharger les fichiers de l'application
 
-Télécharge les fichiers suivants et place-les tous dans le **même dossier** :
+Place tous ces fichiers dans le **même dossier** :
 
 ```
 mon-dossier/
@@ -51,16 +55,14 @@ mon-dossier/
 ├── ocr.py
 ├── matcher.py
 ├── utils.py
-├── requirements.txt
-└── .streamlit/
-    └── config.toml
+└── requirements.txt
 ```
 
 ---
 
 ### 4. Créer l'environnement Python
 
-Ouvre un terminal dans le dossier de l'application et lance ces commandes une par une :
+Ouvre un terminal dans le dossier de l'application.
 
 **Créer l'environnement :**
 ```
@@ -98,27 +100,9 @@ Chaque fois que tu veux utiliser l'application, dans le terminal (environnement 
 streamlit run app.py
 ```
 
-L'application s'ouvre automatiquement dans ton navigateur à l'adresse `http://localhost:8501`.
+L'application s'ouvre dans ton navigateur à `http://localhost:8501`.
 
-> Ollama se lance automatiquement en arrière-plan au démarrage de Windows.  
-> Si ce n'est pas le cas, ouvre un terminal séparé et lance `ollama serve` avant de démarrer Streamlit.
-
----
-
-## Accès depuis un autre appareil du réseau
-
-L'application est accessible depuis n'importe quel appareil connecté au même Wi-Fi.
-
-**Trouver l'adresse IP du PC hôte :**
-
-- Windows : ouvre un terminal et tape `ipconfig` → cherche "Adresse IPv4"
-- macOS : `ipconfig getifaddr en0`
-- Linux : `hostname -I`
-
-Sur l'autre appareil, ouvre un navigateur et va sur :
-```
-http://<adresse-ip>:8501
-```
+> Si Ollama ne se lance pas automatiquement, ouvre un terminal séparé et lance `ollama serve` avant de démarrer Streamlit.
 
 ---
 
@@ -127,60 +111,66 @@ http://<adresse-ip>:8501
 ### Étape 1 — Import et extraction
 
 - Clique sur **Parcourir** et sélectionne une ou plusieurs photos de tickets
-- Formats acceptés : JPG, JPEG, PNG, WEBP, PDF
-- L'extraction prend 15 à 45 secondes par photo selon ton matériel
-- Le résultat s'affiche à droite de chaque photo
+- Formats acceptés : JPG, JPEG, PNG, PDF
+- L'extraction prend 15 à 60 secondes par fichier selon ton matériel
+- **Chaque résultat est sauvegardé immédiatement** dans le dossier `cache_ocr/` — si l'application plante ou que tu fermes la fenêtre, les fichiers déjà traités ne sont pas perdus
+- Au prochain démarrage, les fichiers en cache sont rechargés automatiquement et les fichiers déjà traités sont ignorés si tu les uploades à nouveau
 
-### Étape 2 — Vérification
+### Étape 2 — Import du relevé et mapping des colonnes
 
-- Les données extraites apparaissent dans un tableau éditable
-- Clique directement sur une cellule pour corriger une valeur
-- Clique sur **Exporter le CSV** pour sauvegarder les données
+- Importe le CSV de ton relevé bancaire
+- L'application affiche les colonnes détectées et un aperçu des premières lignes
+- Utilise les menus déroulants pour indiquer quelle colonne correspond à la date, au montant et au libellé
+- Clique sur **Valider** pour passer au rapprochement
 
 ### Étape 3 — Matching bancaire
 
-- Importe le CSV de ton relevé bancaire (téléchargeable depuis l'espace client de ta banque)
-- L'application détecte automatiquement les colonnes date, montant et libellé
-- Le rapprochement se fait sur le montant et la date
+- Le rapprochement se fait automatiquement sur le montant et la date
 - Chaque ligne reçoit un statut :
   - ✅ **Trouvé** — correspondance sur le montant et la date
-  - ⚠️ **Écart** — correspondance probable mais différence de date ou montant
+  - ⚠️ **Écart** — correspondance probable mais différence de date ou de montant
   - ❌ **Non trouvé** — aucune ligne correspondante dans le relevé
-- Exporte le rapport final en CSV ou Excel
+- Exporte le rapport en CSV ou Excel
+
+---
+
+## Vérifier que le GPU est utilisé
+
+Dans la barre latérale gauche, clique sur **🔍 Vérifier GPU**.
+
+- Si le modèle n'est pas encore chargé, fais d'abord un premier appel OCR puis clique à nouveau
+- Si le GPU est détecté mais que le modèle tourne sur CPU, relance `ollama serve` dans un terminal et vérifie que la ligne `CUDA device` apparaît au démarrage
+
+---
+
+## Cache OCR
+
+Les résultats d'extraction sont sauvegardés dans `cache_ocr/` (un fichier JSON par ticket).  
+Pour repartir de zéro, clique sur **🗑️ Vider le cache** dans la barre latérale.
 
 ---
 
 ## Format du relevé bancaire
 
-Le fichier CSV doit contenir au minimum une colonne date, une colonne montant et une colonne libellé.  
-Les exports des banques françaises (Crédit Agricole, BNP, Société Générale…) sont compatibles directement.
+Le fichier doit être au format CSV avec au minimum une colonne date, une colonne montant et une colonne libellé. Les exports des banques françaises (Crédit Agricole, BNP, Société Générale…) sont compatibles directement.
+
+Si ta banque exporte en XLS ou XLSX, ouvre-le dans Excel et enregistre-le en CSV.
 
 ---
 
 ## Problèmes fréquents
 
-**Ollama ne répond pas**
-
+**Ollama ne répond pas**  
 Lance `ollama serve` dans un terminal séparé avant de démarrer l'application.
 
----
+**Le modèle est lent au premier ticket**  
+Normal — le modèle (~5 Go) se charge en mémoire. Attends 30 à 60 secondes après le premier upload.
 
-**Le modèle est lent au premier lancement**
+**Le GPU n'est pas utilisé malgré une carte NVIDIA**  
+Vérifie que la version d'Ollama installée inclut le support CUDA : au démarrage de `ollama serve`, la ligne `CUDA device` doit apparaître. Si ce n'est pas le cas, réinstalle depuis [https://ollama.com/download](https://ollama.com/download).
 
-Normal — le modèle (5 Go) se charge en mémoire. Attends 30 à 60 secondes après le premier upload avant de voir une réponse.
-
----
-
-**Erreur à l'activation du venv sous PowerShell**
-
+**Erreur à l'activation du venv sous PowerShell**  
 ```
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
-
 Puis relance `.venv\Scripts\activate`.
-
----
-
-**Le relevé bancaire n'est pas reconnu**
-
-Vérifie que le fichier est bien au format CSV. Si ta banque exporte en XLS ou XLSX, ouvre-le dans Excel et enregistre-le en CSV (séparateur point-virgule).
